@@ -19,10 +19,24 @@ let bombCount = 1;
 let shieldActive = false;
 let shieldTimer = 0;
 let isGameOver = false;
+
+// ハイスコア
 const hiScoreEl = document.getElementById('hi-score');
 let highScore = Number(localStorage.getItem('highScore')) || 0;
 let hiScoreSaved = false;
 hiScoreEl.textContent = `ハイスコア: ${highScore}`;
+
+// 開発者モード（無限シールド＋被弾カウント）
+let devShield = false;
+let devUsed = false;   // 一度でも使ったらハイスコアを更新しない
+let hitCount = 0;
+const devBtn = document.getElementById('dev-btn');
+
+const toggleDev = () => {
+  devShield = !devShield;
+  if (devShield) { devUsed = true; hitCount = 0; }   // オンにするたび0から数える
+  if (devBtn) devBtn.classList.toggle('on', devShield);
+};
 
 let ripples = [];
 
@@ -38,6 +52,15 @@ const drawPlayer = () => {
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.arc(player.x + player.width / 2, player.y + player.height / 2, 25, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // 開発者シールド（黄色）
+  if (devShield) {
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(player.x + player.width / 2, player.y + player.height / 2, 28, 0, Math.PI * 2);
     ctx.stroke();
   }
 };
@@ -72,6 +95,8 @@ window.addEventListener('keydown', (e) => {
     triggerBomb();
   }
   if ((e.key === 'r' || e.key === 'R') && isGameOver) resetGame();
+  if ((e.key === 'c' || e.key === 'C') && !e.repeat) toggleDev();   // 長押しで連続切替しない
+  if ((e.key === 't' || e.key === 'T') && devShield) gameTime = Math.max(gameTime, 75);   // 開発者モード：phase4へスキップ
 });
 
 window.addEventListener('keyup', (e) => {
@@ -93,6 +118,14 @@ rightBtn.addEventListener('mouseleave', () => keys.ArrowRight = false);
 
 if (bombBtn) {
   bombBtn.addEventListener('click', () => triggerBomb());
+}
+
+// 開発者モードボタン（クリックはスマホのタップでも発火する）
+if (devBtn) {
+  devBtn.addEventListener('click', () => {
+    toggleDev();
+    devBtn.blur();   // スペース/Enterで再度切り替わらないように
+  });
 }
 
 leftBtn.addEventListener('touchstart', (e) => { e.preventDefault(); keys.ArrowLeft = true; });
@@ -132,15 +165,25 @@ const enemyTypes = {
   T7: { color: '#ffffff', width: 40, height: 40 }
 };
 
+// フェーズの切り替わり秒数はここだけで管理（25 / 50 / 75秒）
+const getPhase = () => gameTime < 25 ? 1 : gameTime < 50 ? 2 : gameTime < 75 ? 3 : 4;
+
+// フェーズ表示（エレベーター風）。変わったときだけDOMを触る
+const phaseEls = document.querySelectorAll('.phase');
+let currentPhase = 0;
+const updatePhaseUI = () => {
+  const p = getPhase();
+  if (p === currentPhase) return;
+  currentPhase = p;
+  phaseEls.forEach(el => el.classList.toggle('active', Number(el.dataset.phase) === p));
+};
+
 const getSpawnConfig = () => {
-  if (gameTime < 25) {
-    return { pool: ['T1', 'T2'], maxEnemies: 2 };
-  } else if (gameTime < 50) {
-    return { pool: ['T1', 'T2', 'T3', 'T4'], maxEnemies: 3 };
-  } else if (gameTime < 100) {
-    return { pool: ['T1', 'T2', 'T3', 'T4', 'T5', 'T6'], maxEnemies: 4 };
-  } else {
-    return { pool: ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'], maxEnemies: 5 };
+  switch (getPhase()) {
+    case 1: return { pool: ['T1', 'T2'], maxEnemies: 2 };
+    case 2: return { pool: ['T1', 'T2', 'T3', 'T4'], maxEnemies: 3 };
+    case 3: return { pool: ['T1', 'T2', 'T3', 'T4', 'T5', 'T6'], maxEnemies: 4 };
+    default: return { pool: ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'], maxEnemies: 5 };
   }
 };
 
@@ -162,11 +205,7 @@ const spawnEnemy = () => {
   const config = getSpawnConfig();
   if (enemies.length >= config.maxEnemies) return;
 
-  let currentPool = [...config.pool];
-  const hasT7 = enemies.some(enemy => enemy.type === 'T7');
-  if (hasT7) {
-    currentPool = currentPool.filter(type => type !== 'T7');
-  }
+  const currentPool = [...config.pool];
 
   const randomTypeKey = currentPool[Math.floor(Math.random() * currentPool.length)];
   const typeData = enemyTypes[randomTypeKey];
@@ -253,6 +292,8 @@ const resetGame = () => {
   spawnTimer = 0; itemTimer = 0; shieldItemTimer = 0; bombItemTimer = 0;
   player.x = canvas.width / 2 - player.width / 2;
   hiScoreSaved = false;
+  hitCount = 0; devUsed = false; devShield = false;
+  if (devBtn) devBtn.classList.remove('on');
 };
 
 // ==========================================
@@ -341,12 +382,12 @@ const updateGame = () => {
           }
         }
         // ----------------------------------------
-        // T3: 大玉・自機狙い・1秒間隔で2個
+        // T3: 大玉・自機狙い・1.5秒(90F)間隔で2個
         // ----------------------------------------
         else if (enemy.type === 'T3') {
-          if (enemy.shootTimer >= 60) {
+          if (enemy.shootTimer >= 90) {
             enemy.shootTimer = 0;
-            fireAimed(enemy, 20, 1.5);
+            fireAimed(enemy, 70, 2);
             enemy.actionCounter++;
             if (enemy.actionCounter >= 2) enemy.state = 'leaving';
           }
@@ -363,13 +404,13 @@ const updateGame = () => {
           }
         }
         // ----------------------------------------
-        // T5: 球2個分の太さの垂直ビームを1.5秒(90F)照射
+        // T5: 垂直ビームを1.5秒(90F)照射
         // ----------------------------------------
         else if (enemy.type === 'T5') {
           if (enemy.actionCounter === 0) {
             beams.push({
               ox: enemy.x + enemy.width / 2, oy: enemy.y + enemy.height,
-              angle: 0, width: 20, length: 800,
+              angle: 0, width: 65, length: 800,
               color: enemy.color, life: 90
             });
             enemy.actionCounter = 1;
@@ -462,13 +503,20 @@ const updateGame = () => {
       continue;
     }
 
-    if (!isGameOver && beamHitsPlayer(b)) {
-      if (shieldActive) {
-        shieldActive = false;
-        beams.splice(i, 1);
-        continue;
-      } else {
-        isGameOver = true;
+    if (!isGameOver) {
+      const hit = beamHitsPlayer(b);
+      if (devShield) {
+        // 開発者モード：触れた瞬間だけ被弾を数える（ビームは消えない）
+        if (hit && !b.wasHit) hitCount++;
+        b.wasHit = hit;
+      } else if (hit) {
+        if (shieldActive) {
+          shieldActive = false;
+          beams.splice(i, 1);
+          continue;
+        } else {
+          isGameOver = true;
+        }
       }
     }
 
@@ -501,6 +549,11 @@ const updateGame = () => {
     }
 
     if (!isGameOver && checkCollision(playerHitbox(), bullet)) {
+      if (devShield) {
+        hitCount++;
+        enemyBullets.splice(i, 1);
+        continue;
+      }
       if (shieldActive) {
         shieldActive = false;
         enemyBullets.splice(i, 1);
@@ -532,15 +585,17 @@ const updateGame = () => {
     ctx.stroke();
   }
 
-  if (score > highScore) {
-  highScore = score;
-  hiScoreEl.textContent = `ハイスコア: ${highScore}`;
+  // ハイスコア更新（開発者モードを使った回は更新しない）
+  if (!devUsed && score > highScore) {
+    highScore = score;
+    hiScoreEl.textContent = `ハイスコア: ${highScore}`;
   }
   if (isGameOver && !hiScoreSaved) {
-  localStorage.setItem('highScore', highScore);
-  hiScoreSaved = true;   // 毎フレーム書き込まないためのフラグ
+    localStorage.setItem('highScore', highScore);
+    hiScoreSaved = true;   // 毎フレーム書き込まないためのフラグ
   }
 
+  updatePhaseUI();
   drawPlayer();
 
   // UI描画
@@ -551,6 +606,13 @@ const updateGame = () => {
   if (shieldActive) {
     ctx.fillStyle = '#00ffcc';
     ctx.fillText(`SHIELD: ${Math.ceil(shieldTimer / 60)}s`, 10, 65);
+  }
+  // 開発者モード：被弾数（他のUIより大きく赤で）
+  if (devShield) {
+    ctx.fillStyle = '#ff3b3b';
+    ctx.font = 'bold 24px sans-serif';
+    ctx.fillText(`被弾: ${hitCount}`, 10, 95);
+    ctx.font = '14px sans-serif';
   }
 
   if (isGameOver) {
