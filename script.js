@@ -312,19 +312,19 @@ const updateGame = () => {
     }
 
     itemTimer++;
-    if (itemTimer >= 240) {
+    if (itemTimer >= 300) {
       items.push({ x: Math.random() * (canvas.width - 20), y: -20, width: 20, height: 20, type: 'point', speed: 2, color: '#ff4d4d' });
       itemTimer = 0;
     }
 
     shieldItemTimer++;
-    if (shieldItemTimer >= 1200) {
+    if (shieldItemTimer >= 600) {
       items.push({ x: Math.random() * (canvas.width - 24), y: -24, width: 24, height: 24, type: 'shield', speed: 1.5, color: '#00bcd4' });
       shieldItemTimer = 0;
     }
 
     bombItemTimer++;
-    if (bombItemTimer >= 2400) {
+    if (bombItemTimer >= 1000) {
       items.push({ x: Math.random() * (canvas.width - 24), y: -24, width: 24, height: 24, type: 'bomb', speed: 1.5, color: '#ff69b4' });
       bombItemTimer = 0;
     }
