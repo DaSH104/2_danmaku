@@ -19,8 +19,15 @@ let bombCount = 1;
 let shieldActive = false;
 let shieldTimer = 0;
 let isGameOver = false;
+const hiScoreEl = document.getElementById('hi-score');
+let highScore = Number(localStorage.getItem('highScore')) || 0;
+let hiScoreSaved = false;
+hiScoreEl.textContent = `ハイスコア: ${highScore}`;
 
 let ripples = [];
+
+// 見た目は30pxのまま、弾との当たりだけ中心14px（東方式）
+const playerHitbox = () => ({ x: player.x + 8, y: player.y + 8, width: 14, height: 14 });
 
 const drawPlayer = () => {
   ctx.fillStyle = player.color;
@@ -64,6 +71,7 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'x' || e.key === 'X') {
     triggerBomb();
   }
+  if ((e.key === 'r' || e.key === 'R') && isGameOver) resetGame();
 });
 
 window.addEventListener('keyup', (e) => {
@@ -89,9 +97,14 @@ if (bombBtn) {
 
 leftBtn.addEventListener('touchstart', (e) => { e.preventDefault(); keys.ArrowLeft = true; });
 leftBtn.addEventListener('touchend', () => keys.ArrowLeft = false);
+leftBtn.addEventListener('touchcancel', () => keys.ArrowLeft = false);
 
 rightBtn.addEventListener('touchstart', (e) => { e.preventDefault(); keys.ArrowRight = true; });
 rightBtn.addEventListener('touchend', () => keys.ArrowRight = false);
+rightBtn.addEventListener('touchcancel', () => keys.ArrowRight = false);
+
+// ゲームオーバー中にキャンバスをタップでリスタート（スマホ用）
+canvas.addEventListener('pointerdown', () => { if (isGameOver) resetGame(); });
 
 // ==========================================
 // 3. 時間管理・フェーズ・敵データ
@@ -104,6 +117,7 @@ const updateTime = () => {
   frameCounter++;
   if (frameCounter >= 60) {
     gameTime++;
+    score++; // 1秒ごとに+1
     frameCounter = 0;
   }
 };
@@ -135,13 +149,14 @@ const getSpawnConfig = () => {
 // ==========================================
 let enemies = [];
 let spawnTimer = 0;
-const spawnInterval = 90; 
+const spawnInterval = 90;
 let enemyBullets = [];
 let beams = []; // T5, T6のビーム用
 
 let items = [];
 let itemTimer = 0;
 let shieldItemTimer = 0;
+let bombItemTimer = 0;
 
 const spawnEnemy = () => {
   const config = getSpawnConfig();
@@ -180,6 +195,66 @@ const checkCollision = (rect1, rect2) => {
   );
 };
 
+// 自機狙い弾ヘルパー。f=進行方向のズレ、p=横ズレ（角度に合わせて並びごと回る）
+const fireAimed = (enemy, size, speed, offsets = [{ p: 0, f: 0 }]) => {
+  const cx = enemy.x + enemy.width / 2;
+  const cy = enemy.y + enemy.height;
+  const angle = Math.atan2(
+    player.y + player.height / 2 - cy,
+    player.x + player.width / 2 - cx
+  );
+  const c = Math.cos(angle), s = Math.sin(angle);
+  offsets.forEach(({ p, f }) => {
+    enemyBullets.push({
+      x: cx + c * f - s * p - size / 2,
+      y: cy + s * f + c * p - size / 2,
+      width: size, height: size,
+      speedX: c * speed, speedY: s * speed,
+      color: enemy.color
+    });
+  });
+};
+
+// ビーム判定：自機中心をビーム座標系に直して「長さ方向」「横ズレ」で見る
+const beamHitsPlayer = (b) => {
+  const px = player.x + player.width / 2 - b.ox;
+  const py = player.y + player.height / 2 - b.oy;
+  const s = Math.sin(b.angle), c = Math.cos(b.angle);
+  const along = px * s + py * c;
+  const perp = px * c - py * s;
+  return along >= 0 && along <= b.length && Math.abs(perp) < b.width / 2 + 7;
+};
+
+// アイテム描画：丸＋白フチ＋文字で、四角い弾と区別
+const drawItem = (item) => {
+  const cx = item.x + item.width / 2, cy = item.y + item.height / 2;
+  ctx.fillStyle = item.color;
+  ctx.beginPath();
+  ctx.arc(cx, cy, item.width / 2 + 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 14px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText({ point: 'P', shield: 'S', bomb: 'B' }[item.type], cx, cy + 1);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+};
+
+const resetGame = () => {
+  score = 0; bombCount = 1;
+  shieldActive = false; shieldTimer = 0;
+  isGameOver = false;
+  gameTime = 0; frameCounter = 0;
+  enemies = []; enemyBullets = []; beams = []; items = []; ripples = [];
+  spawnTimer = 0; itemTimer = 0; shieldItemTimer = 0; bombItemTimer = 0;
+  player.x = canvas.width / 2 - player.width / 2;
+  hiScoreSaved = false;
+};
+
 // ==========================================
 // 5. メインループ
 // ==========================================
@@ -195,14 +270,20 @@ const updateGame = () => {
 
     itemTimer++;
     if (itemTimer >= 240) {
-      items.push({ x: Math.random() * (canvas.width - 20), y: -20, width: 20, height: 20, type: 'point', speed: 2, color: '#gold' });
+      items.push({ x: Math.random() * (canvas.width - 20), y: -20, width: 20, height: 20, type: 'point', speed: 2, color: '#ff4d4d' });
       itemTimer = 0;
     }
 
     shieldItemTimer++;
     if (shieldItemTimer >= 1200) {
-      items.push({ x: Math.random() * (canvas.width - 24), y: -24, width: 24, height: 24, type: 'shield', speed: 1.5, color: '#00ffcc' });
+      items.push({ x: Math.random() * (canvas.width - 24), y: -24, width: 24, height: 24, type: 'shield', speed: 1.5, color: '#00bcd4' });
       shieldItemTimer = 0;
+    }
+
+    bombItemTimer++;
+    if (bombItemTimer >= 2400) {
+      items.push({ x: Math.random() * (canvas.width - 24), y: -24, width: 24, height: 24, type: 'bomb', speed: 1.5, color: '#ff69b4' });
+      bombItemTimer = 0;
     }
 
     if (shieldActive) {
@@ -241,76 +322,54 @@ const updateGame = () => {
             enemy.actionCounter++;
             const angle = Math.atan2((player.y + player.height/2) - (enemy.y + enemy.height), (player.x + player.width/2) - (enemy.x + enemy.width/2));
             enemyBullets.push({
-              x: enemy.x + enemy.width/2 - 4, y: enemy.y + enemy.height,
-              width: 8, height: 8, speedX: Math.cos(angle) * 3, speedY: Math.sin(angle) * 3,
+              x: enemy.x + enemy.width/2 - 5, y: enemy.y + enemy.height,
+              width: 10, height: 10, speedX: Math.cos(angle) * 3, speedY: Math.sin(angle) * 3,
               color: enemy.color
             });
             if (enemy.actionCounter >= 5) enemy.state = 'leaving';
           }
         }
         // ----------------------------------------
-        // T2: 横3つの球を垂直発射
+        // T2: 自機狙いの横3連を1.5秒(90F)間隔で3セット
         // ----------------------------------------
         else if (enemy.type === 'T2') {
-          if (enemy.shootTimer >= 60) {
+          if (enemy.shootTimer >= 90) {
             enemy.shootTimer = 0;
-            const size = 8;
-            const spacing = size * 1.5;
-            for (let k = -1; k <= 1; k++) {
-              enemyBullets.push({
-                x: enemy.x + enemy.width/2 - size/2 + k * spacing, y: enemy.y + enemy.height,
-                width: size, height: size, speedX: 0, speedY: 3,
-                color: enemy.color
-              });
-            }
+            fireAimed(enemy, 10, 3, [{ p: -15, f: 0 }, { p: 0, f: 0 }, { p: 15, f: 0 }]);
             enemy.actionCounter++;
             if (enemy.actionCounter >= 3) enemy.state = 'leaving';
           }
         }
         // ----------------------------------------
-        // T3: 2.5倍の大きさ、スピード0.75、1秒間隔で2個
+        // T3: 大玉・自機狙い・1秒間隔で2個
         // ----------------------------------------
         else if (enemy.type === 'T3') {
           if (enemy.shootTimer >= 60) {
             enemy.shootTimer = 0;
-            enemyBullets.push({
-              x: enemy.x + enemy.width/2 - 10, y: enemy.y + enemy.height,
-              width: 20, height: 20, speedX: 0, speedY: 0.75,
-              color: enemy.color
-            });
+            fireAimed(enemy, 20, 1.5);
             enemy.actionCounter++;
             if (enemy.actionCounter >= 2) enemy.state = 'leaving';
           }
         }
         // ----------------------------------------
-        // T4: 逆三角形、スピード1.75、0.75秒(45F)間隔で3セット
+        // T4: 自機狙い・逆三角形（上2個・下1個）・高速・0.75秒(45F)間隔で3セット
         // ----------------------------------------
         else if (enemy.type === 'T4') {
           if (enemy.shootTimer >= 45) {
             enemy.shootTimer = 0;
-            const ex = enemy.x + enemy.width/2;
-            const ey = enemy.y + enemy.height;
-            // 逆三角形の配置（上2個、下1個などスケッチ準拠）
-            const offsets = [{dx: -10, dy: 0}, {dx: 10, dy: 0}, {dx: 0, dy: 15}];
-            offsets.forEach(off => {
-              enemyBullets.push({
-                x: ex + off.dx - 4, y: ey + off.dy,
-                width: 8, height: 8, speedX: 0, speedY: 1.75 * 3,
-                color: enemy.color
-              });
-            });
+            fireAimed(enemy, 10, 5.25, [{ p: -12, f: 0 }, { p: 12, f: 0 }, { p: 0, f: 15 }]);
             enemy.actionCounter++;
             if (enemy.actionCounter >= 3) enemy.state = 'leaving';
           }
         }
         // ----------------------------------------
-        // T5: 球2個分の太さのビームを1.5秒(90F)照射
+        // T5: 球2個分の太さの垂直ビームを1.5秒(90F)照射
         // ----------------------------------------
         else if (enemy.type === 'T5') {
           if (enemy.actionCounter === 0) {
             beams.push({
-              x: enemy.x + enemy.width/2 - 8, y: enemy.y + enemy.height,
-              width: 16, height: canvas.height - (enemy.y + enemy.height),
+              ox: enemy.x + enemy.width / 2, oy: enemy.y + enemy.height,
+              angle: 0, width: 20, length: 800,
               color: enemy.color, life: 90
             });
             enemy.actionCounter = 1;
@@ -319,13 +378,15 @@ const updateGame = () => {
           if (enemy.subTimer >= 90) enemy.state = 'leaving';
         }
         // ----------------------------------------
-        // T6: 間30°で二方向ビームを2秒(120F)照射
+        // T6: 同じ起点から±0.26radで開く二方向ビームを2秒(120F)照射
         // ----------------------------------------
         else if (enemy.type === 'T6') {
           if (enemy.actionCounter === 0) {
-            const width = 12;
-            beams.push({ x: enemy.x + enemy.width/2 - 20, y: enemy.y + enemy.height, width: width, height: canvas.height, color: enemy.color, life: 120, angle: -0.26 });
-            beams.push({ x: enemy.x + enemy.width/2 + 20, y: enemy.y + enemy.height, width: width, height: canvas.height, color: enemy.color, life: 120, angle: 0.26 });
+            const ox = enemy.x + enemy.width / 2, oy = enemy.y + enemy.height;
+            [-0.26, 0.26].forEach(a => beams.push({
+              ox, oy, angle: a, width: 10, length: 800,
+              color: enemy.color, life: 120
+            }));
             enemy.actionCounter = 1;
           }
           enemy.subTimer++;
@@ -339,13 +400,14 @@ const updateGame = () => {
           if (enemy.shootTimer >= 18) {
             enemy.shootTimer = 0;
             for (let k = 0; k < 4; k++) {
-              const baseAngle = (Math.PI / 2) + (k * 0.3) - 0.45;
+              const sweep = Math.sin(enemy.subTimer * 0.04) * 0.8; // 発射方向を左右に揺らす
+              const baseAngle = Math.PI / 2 + sweep + (k - 1.5) * 0.3;
               enemyBullets.push({
-                x: enemy.x + enemy.width/2, y: enemy.y + enemy.height,
-                width: 8, height: 8,
-                speedX: Math.cos(baseAngle) * 2.5,
-                speedY: Math.sin(baseAngle) * 2.5,
-                curve: 0.04, // 弧を描くための曲率
+                x: enemy.x + enemy.width / 2 - 5, y: enemy.y + enemy.height,
+                width: 10, height: 10,
+                speedX: Math.cos(baseAngle) * 3,
+                speedY: Math.sin(baseAngle) * 3,
+                curve: 0.006, // 旋回半径 ≒ 速度/curve = 500px
                 color: enemy.color
               });
             }
@@ -369,7 +431,7 @@ const updateGame = () => {
     ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
   }
 
-  // アイテム処理
+  // アイテム処理（拾いやすいよう判定は見た目の自機サイズ）
   for (let i = items.length - 1; i >= 0; i--) {
     let item = items[i];
     if (!isGameOver) item.y += item.speed;
@@ -379,15 +441,15 @@ const updateGame = () => {
       continue;
     }
 
-    if (checkCollision(player, item)) {
+    if (!isGameOver && checkCollision(player, item)) {
       if (item.type === 'point') score += 15;
       else if (item.type === 'shield') { shieldActive = true; shieldTimer = 600; }
+      else if (item.type === 'bomb') bombCount = Math.min(3, bombCount + 1);
       items.splice(i, 1);
       continue;
     }
 
-    ctx.fillStyle = item.color;
-    ctx.fillRect(item.x, item.y, item.width, item.height);
+    drawItem(item);
   }
 
   // ビームの描画・判定
@@ -400,7 +462,7 @@ const updateGame = () => {
       continue;
     }
 
-    if (!isGameOver && checkCollision(player, b)) {
+    if (!isGameOver && beamHitsPlayer(b)) {
       if (shieldActive) {
         shieldActive = false;
         beams.splice(i, 1);
@@ -410,10 +472,13 @@ const updateGame = () => {
       }
     }
 
-    ctx.fillStyle = b.color;
+    ctx.save();
+    ctx.translate(b.ox, b.oy);
+    ctx.rotate(-b.angle);
     ctx.globalAlpha = 0.6;
-    ctx.fillRect(b.x, b.y, b.width, b.height);
-    ctx.globalAlpha = 1.0;
+    ctx.fillStyle = b.color;
+    ctx.fillRect(-b.width / 2, 0, b.width, b.length);
+    ctx.restore();
   }
 
   // 弾の移動・描画・カーブ処理（T7用）
@@ -435,7 +500,7 @@ const updateGame = () => {
       continue;
     }
 
-    if (!isGameOver && checkCollision(player, bullet)) {
+    if (!isGameOver && checkCollision(playerHitbox(), bullet)) {
       if (shieldActive) {
         shieldActive = false;
         enemyBullets.splice(i, 1);
@@ -467,6 +532,15 @@ const updateGame = () => {
     ctx.stroke();
   }
 
+  if (score > highScore) {
+  highScore = score;
+  hiScoreEl.textContent = `ハイスコア: ${highScore}`;
+  }
+  if (isGameOver && !hiScoreSaved) {
+  localStorage.setItem('highScore', highScore);
+  hiScoreSaved = true;   // 毎フレーム書き込まないためのフラグ
+  }
+
   drawPlayer();
 
   // UI描画
@@ -486,11 +560,22 @@ const updateGame = () => {
     ctx.font = '28px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2);
+    ctx.font = '14px sans-serif';
+    ctx.fillText('R / タップでリスタート', canvas.width / 2, canvas.height / 2 + 30);
     ctx.textAlign = 'left';
   }
-
-  requestAnimationFrame(updateGame);
 };
 
-requestAnimationFrame(updateGame);
-
+// ==========================================
+// 6. 60fps固定ループ（120/144Hz環境でも速くならない）
+// ==========================================
+const FRAME = 1000 / 60;
+let lastTime = 0;
+const loop = (now) => {
+  requestAnimationFrame(loop);
+  const delta = now - lastTime;
+  if (delta < FRAME) return;
+  lastTime = now - (delta % FRAME);
+  updateGame();
+};
+requestAnimationFrame(loop);
