@@ -318,13 +318,13 @@ const updateGame = () => {
     }
 
     shieldItemTimer++;
-    if (shieldItemTimer >= 600) {
+    if (shieldItemTimer >= 900) {
       items.push({ x: Math.random() * (canvas.width - 24), y: -24, width: 24, height: 24, type: 'shield', speed: 1.5, color: '#00bcd4' });
       shieldItemTimer = 0;
     }
 
     bombItemTimer++;
-    if (bombItemTimer >= 1000) {
+    if (bombItemTimer >= 1800) {
       items.push({ x: Math.random() * (canvas.width - 24), y: -24, width: 24, height: 24, type: 'bomb', speed: 1.5, color: '#ff69b4' });
       bombItemTimer = 0;
     }
