@@ -389,7 +389,7 @@ const updateGame = () => {
         else if (enemy.type === 'T3') {
           if (enemy.shootTimer >= 90) {
             enemy.shootTimer = 0;
-            fireAimed(enemy, 70, 2);
+            fireAimed(enemy, 60, 2);
             enemy.actionCounter++;
             if (enemy.actionCounter >= 2) enemy.state = 'leaving';
           }
