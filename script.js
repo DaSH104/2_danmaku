@@ -7,8 +7,8 @@ const ctx = canvas.getContext('2d');
 const player = {
   x: canvas.width / 2 - 15,
   y: 500,
-  width: 30,
-  height: 30,
+  width: 25,
+  height: 25,
   color: '#00f2fe'
 };
 
@@ -164,6 +164,8 @@ const enemyTypes = {
   T6: { color: '#9c27b0', width: 40, height: 40 },
   T7: { color: '#ffffff', width: 40, height: 40 }
 };
+
+const BEAM_WARMUP = 35;   // 予備線の長さ（30F = 0.5秒）
 
 // フェーズの切り替わり秒数はここだけで管理（25 / 50 / 75秒）
 const getPhase = () => gameTime < 25 ? 1 : gameTime < 50 ? 2 : gameTime < 75 ? 3 : 4;
@@ -411,12 +413,12 @@ const updateGame = () => {
             beams.push({
               ox: enemy.x + enemy.width / 2, oy: enemy.y + enemy.height,
               angle: 0, width: 65, length: 800,
-              color: enemy.color, life: 90
+              color: enemy.color, life: 90, warmup: BEAM_WARMUP
             });
             enemy.actionCounter = 1;
           }
           enemy.subTimer++;
-          if (enemy.subTimer >= 90) enemy.state = 'leaving';
+          if (enemy.subTimer >= 90 + BEAM_WARMUP) enemy.state = 'leaving';
         }
         // ----------------------------------------
         // T6: 同じ起点から±0.26radで開く二方向ビームを2秒(120F)照射
@@ -426,12 +428,12 @@ const updateGame = () => {
             const ox = enemy.x + enemy.width / 2, oy = enemy.y + enemy.height;
             [-0.26, 0.26].forEach(a => beams.push({
               ox, oy, angle: a, width: 10, length: 800,
-              color: enemy.color, life: 120
+              color: enemy.color, life: 120, warmup: BEAM_WARMUP
             }));
             enemy.actionCounter = 1;
           }
           enemy.subTimer++;
-          if (enemy.subTimer >= 120) enemy.state = 'leaving';
+          if (enemy.subTimer >= 120 + BEAM_WARMUP) enemy.state = 'leaving';
         }
         // ----------------------------------------
         // T7: 台風のように弧を描く球を4個ずつ0.3s間隔で5秒間
@@ -496,6 +498,23 @@ const updateGame = () => {
   // ビームの描画・判定
   for (let i = beams.length - 1; i >= 0; i--) {
     let b = beams[i];
+
+    if (b.warmup > 0) {
+      if (!isGameOver) b.warmup--;
+      ctx.save();
+      ctx.translate(b.ox, b.oy);
+      ctx.rotate(-b.angle);
+      ctx.fillStyle = b.color;
+      ctx.globalAlpha = 0.15;
+      ctx.fillRect(-b.width / 2, 0, b.width, b.length);       // 危険範囲を薄く塗る
+      ctx.globalAlpha = 0.6;
+      ctx.strokeStyle = b.color;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(-b.width / 2, 0, b.width, b.length);      // 縁だけくっきり
+      ctx.restore();
+      continue;   // 準備中は寿命も判定も進めない
+    }
+
     if (!isGameOver) b.life--;
 
     if (b.life <= 0) {

@@ -1,0 +1,105 @@
+body{
+  margin: 0;
+  background-color: #111;
+  color: #fff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  font-family: sans-serif;
+}
+
+#game-container{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: #222;
+  padding: 10px;
+  border-radius: 8px;
+}
+
+#ui-panel{
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 400px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: bold;
+  box-sizing: border-box;
+  padding: 0 5px;
+}
+
+#gameCanvas{
+  background-color: #000;
+  display: block;
+  border:  2px solid #555;
+  border-radius: 4px;
+}
+
+#control-panel{
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 400px;
+  margin-top: 10px;
+}
+
+#control-panel button{
+  background-color: #333;
+  color: #fff;
+  border: 1px solid #666;
+  border-radius: 6px;
+  padding: 12px 0;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  flex: 1;
+  margin: 0 4px;
+}
+
+#control-panel button:active{
+  background-color: #555;
+}
+
+#top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+#dev-btn {
+  min-width: 56px;
+  min-height: 36px;          /* スマホで押しやすい大きさ */
+  border: 2px solid #ffd700;
+  border-radius: 6px;
+  background: transparent;
+  color: #ffd700;
+  font-weight: bold;
+}
+#dev-btn.on {                /* オンのときは塗りつぶし */
+  background: #ffd700;
+  color: #000;
+}
+
+#phase-bar {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+}
+.phase {
+  flex: 1;
+  text-align: center;
+  padding: 4px 0;
+  font-size: 12px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  color: #fff;
+  opacity: 0.3;                 /* 薄く */
+  transition: opacity 0.3s, background 0.3s, box-shadow 0.3s;
+}
+.phase.active { opacity: 1; font-weight: bold; }
+.phase[data-phase="1"].active { background: #9acd32; color: #000; box-shadow: 0 0 10px #9acd32; }
+.phase[data-phase="2"].active { background: #ffeb3b; color: #000; box-shadow: 0 0 10px #ffeb3b; }
+.phase[data-phase="3"].active { background: #ff4d4d; color: #fff; box-shadow: 0 0 10px #ff4d4d; }
+.phase[data-phase="4"].active { background: #9c27b0; color: #fff; box-shadow: 0 0 10px #9c27b0; }

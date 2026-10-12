@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>#2 弾幕避けゲーム</title>
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+    <div id="game-container">
+
+        <div id="top-bar">
+            <div id="hi-score">ハイスコア: 0</div>
+            <button id="dev-btn">無敵モード（苦手な人向け）</button>
+        </div>
+
+        <div id="phase-bar">
+            <span class="phase" data-phase="1">phase1</span>
+            <span class="phase" data-phase="2">phase2</span>
+            <span class="phase" data-phase="3">phase3</span>
+            <span class="phase" data-phase="4">phase4</span>
+        </div>
+
+        <canvas id="gameCanvas" width="400" height="600"></canvas>
+
+        <div id="control-panel">
+            <button id="left-btn">◀</button>
+            <button id="bomb-btn">ボム</button>
+            <button id="right-btn">▶</button>
+        </div>
+    </div>
+
+
+    <script src="./script.js"></script>
+</body>
+</html>
