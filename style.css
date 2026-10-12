@@ -9,6 +9,13 @@ body{
   font-family: sans-serif;
 }
 
+/* ページ全体やコントロールパネル周りでテキスト選択を禁止する */
+body, button {
+  -webkit-user-select: none; /* Safari / Chrome 用 */
+  user-select: none;         /* 標準 */
+  -webkit-touch-callout: none; /* iOSで長押しメニューが出るのを防ぐ */
+}
+
 #game-container{
   display: flex;
   flex-direction: column;
